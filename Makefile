@@ -7,7 +7,7 @@ ifeq ($(OSTYPE),Darwin)
 endif
 
 ifeq ($(OSTYPE),Linux)
-	include make-linux.mk
+	include make-linux-opt.mk
 endif
 
 ifeq ($(OSTYPE),FreeBSD)
