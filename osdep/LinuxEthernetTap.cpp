@@ -144,11 +144,11 @@ LinuxEthernetTap::LinuxEthernetTap(
 	// Set MTU
 	ifr.ifr_ifru.ifru_mtu = (int)mtu;
 	if (ioctl(sock,SIOCSIFMTU,(void *)&ifr) < 0) {
-fprintf(stderr,"lxl: unable to configure TAP MTU, still continue...\n");
+		fprintf(stderr,"lxl: unable to configure TAP MTU, still continue...\n");
+		// lxl: don't exit, just log an error and continue
 #if 0
 		::close(_fd);
 		::close(sock);
-fprintf(stderr,"lxl: %s %d\n", __FILE__, __LINE__);
 		throw std::runtime_error("unable to configure TAP MTU");
 #endif // 0
 	}
