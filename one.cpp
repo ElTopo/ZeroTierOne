@@ -928,7 +928,9 @@ static int _setCapabilities(int flags)
 {
 	//lxl: optware-ng does not define _LINUX_CAPABILITY_VERSION_1
 	//     so let me define it here
+#if !defined(_LINUX_CAPABILITY_VERSION_1)
 	#define _LINUX_CAPABILITY_VERSION_1 _LINUX_CAPABILITY_VERSION
+#endif // !defined(_LINUX_CAPABILITY_VERSION_1)
 	//lxl: optware-ng does not define _LINUX_CAPABILITY_VERSION_1
 	cap_header_struct capheader = {_LINUX_CAPABILITY_VERSION_1, 0};
 	cap_data_struct capdata;
