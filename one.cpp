@@ -51,7 +51,9 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <linux/capability.h>
-#include <linux/securebits.h>
+//lxl: optware-ng does not have /opt/include/linux/securebits.h
+//#include <linux/securebits.h>
+//lxl: optware-ng does not have /opt/include/linux/securebits.h
 #endif
 #endif
 
@@ -924,6 +926,10 @@ static void _notDropping(const char *procName,const std::string &homeDir)
 
 static int _setCapabilities(int flags)
 {
+	//lxl: optware-ng does not define _LINUX_CAPABILITY_VERSION_1
+	//     so let me define it here
+	#define _LINUX_CAPABILITY_VERSION_1 _LINUX_CAPABILITY_VERSION
+	//lxl: optware-ng does not define _LINUX_CAPABILITY_VERSION_1
 	cap_header_struct capheader = {_LINUX_CAPABILITY_VERSION_1, 0};
 	cap_data_struct capdata;
 	capdata.inheritable = capdata.permitted = capdata.effective = flags;
@@ -970,10 +976,14 @@ static void dropPrivileges(const char *procName,const std::string &homeDir)
 		_notDropping(procName,homeDir);
 		return;
 	}
+	//lxl: optware-ng does not define PR_SET_SECUREBITS/SECBIT_KEEP_CAPS/SECBIT_NOROOT
+#if 0 //lxl
 	if (prctl(PR_SET_SECUREBITS, SECBIT_KEEP_CAPS | SECBIT_NOROOT) < 0) {
 		_notDropping(procName,homeDir);
 		return;
 	}
+#endif // 0 //lxl
+	//lxl: optware-ng does not define PR_SET_SECUREBITS/SECBIT_KEEP_CAPS/SECBIT_NOROOT
 
 	// Change ownership of our home directory if everything looks good (does nothing if already chown'd)
 	_recursiveChown(homeDir.c_str(),targetUser->pw_uid,targetUser->pw_gid);
