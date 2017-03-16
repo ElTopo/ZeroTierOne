@@ -2,7 +2,6 @@
 #      1. replace all fixed /usr with /opt
 #      2. replace all $(DESTDIR)/usr/ with $(DESTDIR)/
 #      3. replace all fixed /var with  $(DESTDIR)/var
-#      4. add -std=c++11
 # lxl: port the original make-linux.mk to make-linux-opt.mk
 
 # Automagically pick clang or gcc, with preference for clang
@@ -74,10 +73,7 @@ node/Salsa20.o node/SHA512.o node/C25519.o node/Poly1305.o: CFLAGS = -Wall -O2 -
 else
 	CFLAGS?=-O3 -fstack-protector
 	override CFLAGS+=-Wall -fPIE -pthread $(INCLUDES) -DNDEBUG $(DEFS)
-# lxl: add -cstd=c++11
-	# CXXFLAGS?=-O3 -fstack-protector-strong
-	CXXFLAGS?=-std=c++11 -O3 -fstack-protector-strong
-# lxl: add -cstd=c++11
+	CXXFLAGS?=-O3 -fstack-protector-strong
 	override CXXFLAGS+=-Wall -Wno-unused-result -Wreorder -fPIE -std=c++11 -pthread $(INCLUDES) -DNDEBUG $(DEFS)
 	override LDFLAGS+=-pie -Wl,-z,relro,-z,now
 	STRIP?=strip
