@@ -72,13 +72,15 @@ bool IncomingPacket::tryDecode(const RuntimeEnvironment *RR)
 		if (peer) {
 			if (!trusted) {
 				if (!dearmor(peer->key())) {
+					//fprintf(stderr,"dropped packet from %s(%s), MAC authentication failed (size: %u)" ZT_EOL_S,sourceAddress.toString().c_str(),_path->address().toString().c_str(),size());
 					TRACE("dropped packet from %s(%s), MAC authentication failed (size: %u)",sourceAddress.toString().c_str(),_path->address().toString().c_str(),size());
 					return true;
 				}
 			}
 
 			if (!uncompress()) {
-				TRACE("dropped packet from %s(%s), compressed data invalid (verb may be %u)",sourceAddress.toString().c_str(),_path->address().toString().c_str(),(unsigned int)verb());
+				//fprintf(stderr,"dropped packet from %s(%s), compressed data invalid (size %u, verb may be %u)" ZT_EOL_S,sourceAddress.toString().c_str(),_path->address().toString().c_str(),size(),(unsigned int)verb());
+				TRACE("dropped packet from %s(%s), compressed data invalid (size %u, verb may be %u)",sourceAddress.toString().c_str(),_path->address().toString().c_str(),size(),(unsigned int)verb());
 				return true;
 			}
 
@@ -477,7 +479,11 @@ bool IncomingPacket::_doOK(const RuntimeEnvironment *RR,const SharedPtr<Peer> &p
 					} else ptr += 2;
 				}
 
-				TRACE("%s(%s): OK(HELLO), version %u.%u.%u, latency %u, reported external address %s",source().toString().c_str(),_path->address().toString().c_str(),vMajor,vMinor,vRevision,latency,((externalSurfaceAddress) ? externalSurfaceAddress.toString().c_str() : "(none)"));
+#ifdef ZT_TRACE
+				const std::string tmp1(source().toString());
+				const std::string tmp2(_path->address().toString());
+				TRACE("%s(%s): OK(HELLO), version %u.%u.%u, latency %u",tmp1.c_str(),tmp2.c_str(),vMajor,vMinor,vRevision,latency);
+#endif
 
 				if (!hops())
 					peer->addDirectLatencyMeasurment((unsigned int)latency);
@@ -836,7 +842,7 @@ bool IncomingPacket::_doNETWORK_CREDENTIALS(const RuntimeEnvironment *RR,const S
 		bool trustEstablished = false;
 
 		unsigned int p = ZT_PACKET_IDX_PAYLOAD;
-		while ((p < size())&&((*this)[p])) {
+		while ((p < size())&&((*this)[p] != 0)) {
 			p += com.deserialize(*this,p);
 			if (com) {
 				const SharedPtr<Network> network(RR->node->network(com.networkId()));
@@ -938,9 +944,11 @@ bool IncomingPacket::_doNETWORK_CREDENTIALS(const RuntimeEnvironment *RR,const S
 
 		peer->received(_path,hops(),packetId(),Packet::VERB_NETWORK_CREDENTIALS,0,Packet::VERB_NOP,trustEstablished);
 	} catch (std::exception &exc) {
+		//fprintf(stderr,"dropped NETWORK_CREDENTIALS from %s(%s): %s" ZT_EOL_S,source().toString().c_str(),_path->address().toString().c_str(),exc.what());
 		TRACE("dropped NETWORK_CREDENTIALS from %s(%s): %s",source().toString().c_str(),_path->address().toString().c_str(),exc.what());
 	} catch ( ... ) {
-		TRACE("dropped NETWORK_CREDENTIALS from %s(%s): unexpected exception",source().toString().c_str(),_path->address().toString().c_str());
+		//fprintf(stderr,"dropped NETWORK_CREDENTIALS from %s(%s): unknown exception" ZT_EOL_S,source().toString().c_str(),_path->address().toString().c_str());
+		TRACE("dropped NETWORK_CREDENTIALS from %s(%s): unknown exception",source().toString().c_str(),_path->address().toString().c_str());
 	}
 	return true;
 }
@@ -953,8 +961,8 @@ bool IncomingPacket::_doNETWORK_CONFIG_REQUEST(const RuntimeEnvironment *RR,cons
 		const uint64_t requestPacketId = packetId();
 
 		if (RR->localNetworkController) {
-			const unsigned int metaDataLength = at<uint16_t>(ZT_PROTO_VERB_NETWORK_CONFIG_REQUEST_IDX_DICT_LEN);
-			const char *metaDataBytes = (const char *)field(ZT_PROTO_VERB_NETWORK_CONFIG_REQUEST_IDX_DICT,metaDataLength);
+			const unsigned int metaDataLength = (ZT_PROTO_VERB_NETWORK_CONFIG_REQUEST_IDX_DICT_LEN <= size()) ? at<uint16_t>(ZT_PROTO_VERB_NETWORK_CONFIG_REQUEST_IDX_DICT_LEN) : 0;
+			const char *metaDataBytes = (metaDataLength != 0) ? (const char *)field(ZT_PROTO_VERB_NETWORK_CONFIG_REQUEST_IDX_DICT,metaDataLength) : (const char *)0;
 			const Dictionary<ZT_NETWORKCONFIG_METADATA_DICT_CAPACITY> metaData(metaDataBytes,metaDataLength);
 			RR->localNetworkController->request(nwid,(hopCount > 0) ? InetAddress() : _path->address(),requestPacketId,peer->identity(),metaData);
 		} else {
@@ -969,10 +977,10 @@ bool IncomingPacket::_doNETWORK_CONFIG_REQUEST(const RuntimeEnvironment *RR,cons
 
 		peer->received(_path,hopCount,requestPacketId,Packet::VERB_NETWORK_CONFIG_REQUEST,0,Packet::VERB_NOP,false);
 	} catch (std::exception &exc) {
-		fprintf(stderr,"WARNING: network config request failed with exception: %s" ZT_EOL_S,exc.what());
+		//fprintf(stderr,"dropped NETWORK_CONFIG_REQUEST from %s(%s): %s" ZT_EOL_S,source().toString().c_str(),_path->address().toString().c_str(),exc.what());
 		TRACE("dropped NETWORK_CONFIG_REQUEST from %s(%s): %s",source().toString().c_str(),_path->address().toString().c_str(),exc.what());
 	} catch ( ... ) {
-		fprintf(stderr,"WARNING: network config request failed with exception: unknown exception" ZT_EOL_S);
+		//fprintf(stderr,"dropped NETWORK_CONFIG_REQUEST from %s(%s): unknown exception" ZT_EOL_S,source().toString().c_str(),_path->address().toString().c_str());
 		TRACE("dropped NETWORK_CONFIG_REQUEST from %s(%s): unknown exception",source().toString().c_str(),_path->address().toString().c_str());
 	}
 	return true;

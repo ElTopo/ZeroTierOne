@@ -148,9 +148,9 @@ void SoftwareUpdater::handleSoftwareUpdateUserMessage(uint64_t origin,const void
 								std::vector<unsigned int> dvArch;
 								if (dvArch2.is_array()) {
 									for(unsigned long i=0;i<dvArch2.size();++i)
-										dvArch.push_back(OSUtils::jsonInt(dvArch2[i],0));
+										dvArch.push_back((unsigned int)OSUtils::jsonInt(dvArch2[i],0));
 								} else {
-									dvArch.push_back(OSUtils::jsonInt(dvArch2,0));
+									dvArch.push_back((unsigned int)OSUtils::jsonInt(dvArch2,0));
 								}
 
 								if ((OSUtils::jsonInt(d->second.meta[ZT_SOFTWARE_UPDATE_JSON_PLATFORM],0) == rvPlatform)&&
@@ -258,14 +258,14 @@ void SoftwareUpdater::handleSoftwareUpdateUserMessage(uint64_t origin,const void
 
 			default:
 				if (_distLog) {
-					fprintf(_distLog,"%.10llx WARNING: bad update message verb==%u length==%u (unrecognized verb)" ZT_EOL_S,origin,(unsigned int)v,len);
+					fprintf(_distLog,"%.10llx WARNING: bad update message verb==%u length==%u (unrecognized verb)" ZT_EOL_S,(unsigned long long)origin,(unsigned int)v,len);
 					fflush(_distLog);
 				}
 				break;
 		}
 	} catch ( ... ) {
 		if (_distLog) {
-			fprintf(_distLog,"%.10llx WARNING: bad update message verb==%u length==%u (unexpected exception, likely invalid JSON)" ZT_EOL_S,origin,(unsigned int)v,len);
+			fprintf(_distLog,"%.10llx WARNING: bad update message verb==%u length==%u (unexpected exception, likely invalid JSON)" ZT_EOL_S,(unsigned long long)origin,(unsigned int)v,len);
 			fflush(_distLog);
 		}
 	}
