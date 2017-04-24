@@ -2,6 +2,8 @@
 #      1. replace all fixed /usr with /opt
 #      2. replace all $(DESTDIR)/usr/ with $(DESTDIR)/
 #      3. replace all fixed /var with  $(DESTDIR)/var
+#      4. since optware-ng does not provide libc's sys/auxv.h,
+#         we cannot use ZT_USE_ARM32_NEON_ASM_SALSA2012 so comment it out
 # lxl: port the original make-linux.mk to make-linux-opt.mk
 
 # Automagically pick clang or gcc, with preference for clang
@@ -106,7 +108,9 @@ endif
 ifeq ($(CC_MACH),arm)
         ZT_ARCHITECTURE=3
 	override DEFS+=-DZT_NO_TYPE_PUNNING
-	ZT_USE_ARM32_NEON_ASM_SALSA2012=1
+	# lxl: optware-ng does not have <sys/auxv.h>
+	#ZT_USE_ARM32_NEON_ASM_SALSA2012=1
+	# lxl: optware-ng does not have <sys/auxv.h>
 endif
 ifeq ($(CC_MACH),armel)
         ZT_ARCHITECTURE=3
