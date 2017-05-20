@@ -25,6 +25,7 @@ NOTE: don't forget to update /jffs/scripts/post-mount or bootscript
                 ln -nsf /opt/var/lib/zerotier-one /var/lib/zerotier-one
                 /opt/sbin/zerotier-one -d
 
+                # SECURITY NOTE: only do this if you trust zerotier (private) network!
                 # allow network access from zt0
                 iptables -I INPUT -i zt0 -j ACCEPT
         fi
