@@ -79,7 +79,7 @@ endif
 ifeq ($(ZT_SYNOLOGY), 1)
 	override CFLAGS+=-fPIC
 	override CXXFLAGS+=-fPIC
-        override DEFS+=-D__SYNOLOGY__
+	override DEFS+=-D__SYNOLOGY__
 endif
 
 ifeq ($(ZT_TRACE),1)
@@ -111,6 +111,12 @@ ifeq ($(CC_MACH),amd64)
 endif
 ifeq ($(CC_MACH),powerpc64le)
 	ZT_ARCHITECTURE=8
+	override DEFS+=-DZT_NO_TYPE_PUNNING
+endif
+ifeq ($(CC_MACH),powerpc)
+	ZT_ARCHITECTURE=8
+	override DEFS+=-DZT_NO_TYPE_PUNNING
+	override DEFS+=-DZT_NO_CAPABILITIES
 endif
 ifeq ($(CC_MACH),ppc64le)
 	ZT_ARCHITECTURE=8
@@ -199,10 +205,6 @@ ifeq ($(CC_MACH),mips64el)
 	ZT_ARCHITECTURE=6
 	override DEFS+=-DZT_NO_TYPE_PUNNING
 endif
-ifeq ($(CC_MACH),powerpc64le)
-	ZT_ARCHITECTURE=7
-	override DEFS+=-DZT_NO_TYPE_PUNNING
-endif
 
 # Fail if system architecture could not be determined
 ifeq ($(ZT_ARCHITECTURE),999)
@@ -237,6 +239,7 @@ ifeq ($(ZT_ARCHITECTURE),3)
 	else
 		override CFLAGS+=-march=armv5 -mno-unaligned-access -marm
 		override CXXFLAGS+=-march=armv5 -mno-unaligned-access -marm
+		ZT_USE_ARM32_NEON_ASM_CRYPTO=0
 	endif
 endif
 
@@ -287,7 +290,7 @@ manpages:	FORCE
 doc:	manpages
 
 clean: FORCE
-	rm -rf *.a *.so *.o node/*.o controller/*.o osdep/*.o service/*.o ext/http-parser/*.o ext/miniupnpc/*.o ext/libnatpmp/*.o $(CORE_OBJS) $(ONE_OBJS) zerotier-one zerotier-idtool zerotier-cli zerotier-selftest build-* ZeroTierOneInstaller-* *.deb *.rpm .depend debian/files debian/zerotier-one*.debhelper debian/zerotier-one.substvars debian/*.log debian/zerotier-one doc/node_modules ext/misc/*.o
+	rm -rf *.a *.so *.o node/*.o controller/*.o osdep/*.o service/*.o ext/http-parser/*.o ext/miniupnpc/*.o ext/libnatpmp/*.o $(CORE_OBJS) $(ONE_OBJS) zerotier-one zerotier-idtool zerotier-cli zerotier-selftest build-* ZeroTierOneInstaller-* *.deb *.rpm .depend debian/files debian/zerotier-one*.debhelper debian/zerotier-one.substvars debian/*.log debian/zerotier-one doc/node_modules ext/misc/*.o debian/.debhelper debian/debhelper-build-stamp
 
 distclean:	clean
 
@@ -354,6 +357,9 @@ uninstall:	FORCE
 
 debian:	FORCE
 	debuild -I -i -us -uc -nc -b
+
+debian-clean: FORCE
+	rm -rf debian/files debian/zerotier-one*.debhelper debian/zerotier-one.substvars debian/*.log debian/zerotier-one debian/.debhelper debian/debhelper-build-stamp
 
 redhat:	FORCE
 	rpmbuild -ba zerotier-one.spec
