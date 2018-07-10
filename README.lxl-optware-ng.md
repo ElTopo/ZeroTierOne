@@ -21,10 +21,7 @@ NOTE: don't forget to update /jffs/scripts/post-mount or bootscript
         then
                 modprobe tun
                 # if /var/lib/zerotier-one is not persistent, recreate it
-                rm -rf /var/lib/zerotier-one
-                ln -nsf /opt/var/lib/zerotier-one /var/lib/zerotier-one
-                /opt/sbin/zerotier-one -d
-
+                /opt/sbin/zerotier-one -d /opt/var/lib/zerotier-one
                 # SECURITY NOTE: only do this if you trust zerotier (private) network!
                 # allow network access from zt0
                 iptables -I INPUT -i zt0 -j ACCEPT
