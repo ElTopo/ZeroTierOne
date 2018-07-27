@@ -12,5 +12,5 @@ else
 fi
 
 $SUDO killall -9 zerotier-one 
-$SUDO zerotier-one -d
+$SUDO zerotier-one -d /opt/var/lib/zerotier-one
 
