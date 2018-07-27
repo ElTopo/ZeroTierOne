@@ -20,7 +20,7 @@ NOTE: don't forget to update /jffs/scripts/post-mount or bootscript
         if [ -x /opt/sbin/zerotier-one ]
         then
                 modprobe tun
-                # if /var/lib/zerotier-one is not persistent, recreate it
+                # /var/lib/zerotier-one is not persistent, use my own path
                 /opt/sbin/zerotier-one -d /opt/var/lib/zerotier-one
                 # SECURITY NOTE: only do this if you trust zerotier (private) network!
                 # allow network access from zt0
