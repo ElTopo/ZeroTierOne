@@ -15,7 +15,7 @@ $SUDO killall -9 zerotier-one
 $SUDO zerotier-one -d /opt/var/lib/zerotier-one
 
 sleep 5
-PIDs=$(pgrep zerotier-one)
+PIDs=$(/opt/bin/busybox pidof zerotier-one)
 if [ -z "$PIDs" ] 
 then
 	echo "zerotier-one is NOT running!"
