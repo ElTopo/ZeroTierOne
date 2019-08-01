@@ -31,6 +31,7 @@
 
 #include <sys/socket.h>
 #include <asm/types.h>
+typedef unsigned long long __u64;
 #include <linux/rtnetlink.h>
 #include <sys/socket.h>
 #include <linux/if.h>
