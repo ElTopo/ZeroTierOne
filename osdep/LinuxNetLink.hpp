@@ -118,10 +118,6 @@ private:
 
 }
 
-<<<<<<< HEAD
-#endif // ZT_LINUX_NETLINK_HPPS
-=======
 #endif
 
 #endif // ZT_LINUX_NETLINK_HPPS
->>>>>>> upstream/master
