@@ -29,7 +29,11 @@
 #include <sys/uio.h>
 #include <dirent.h>
 #ifdef __LINUX__
+	// lxl: optware-ng does not have <sys/auxv.h>
+#ifdef ZT_USE_ARM32_NEON_ASM_SALSA2012
 #include <sys/auxv.h>
+#endif // ZT_USE_ARM32_NEON_ASM_SALSA2012
+	// lxl: optware-ng does not have <sys/auxv.h>
 #endif
 #endif
 
