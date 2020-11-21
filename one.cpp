@@ -11,6 +11,10 @@
  */
 /****/
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1155,7 +1159,7 @@ static int cli(int argc,char **argv)
 					void *addr;
 					getifaddrs(&ifap);
 					for(ifa = ifap; ifa; ifa = ifa->ifa_next) {
-						if(strcmp(ifr.ifr_name, ifa->ifa_name) == 0) {
+						if(strcmp(ifr.ifr_name, ifa->ifa_name) == 0 && ifa->ifa_addr != NULL) {
 							if(ifa->ifa_addr->sa_family == AF_INET) {
 								struct sockaddr_in *ipv4 = (struct sockaddr_in*)ifa->ifa_addr;
 								addr = &ipv4->sin_addr;
@@ -1482,8 +1486,13 @@ static int idtool(int argc,char **argv)
 static void _sighandlerHup(int sig)
 {
 }
+static void _sighandlerReallyQuit(int sig)
+{
+	exit(0);
+}
 static void _sighandlerQuit(int sig)
 {
+	alarm(5); // force exit after 5s
 	OneService *s = zt1Service;
 	if (s)
 		s->terminate();
@@ -1879,13 +1888,23 @@ int __cdecl _tmain(int argc, _TCHAR* argv[])
 int main(int argc,char **argv)
 #endif
 {
+#ifdef __LINUX__
+	// This corrects for systems with abnormally small defaults (musl) and also
+	// shrinks the stack on systems with large defaults to save a bit of memory.
+	pthread_attr_t tattr;
+	pthread_attr_init(&tattr);
+	pthread_attr_setstacksize(&tattr,1048576);
+	pthread_setattr_default_np(&tattr);
+	pthread_attr_destroy(&tattr);
+#endif
+
 #ifdef __UNIX_LIKE__
 	signal(SIGHUP,&_sighandlerHup);
 	signal(SIGPIPE,SIG_IGN);
 	signal(SIGIO,SIG_IGN);
 	signal(SIGUSR1,SIG_IGN);
 	signal(SIGUSR2,SIG_IGN);
-	signal(SIGALRM,SIG_IGN);
+	signal(SIGALRM,&_sighandlerReallyQuit);
 	signal(SIGINT,&_sighandlerQuit);
 	signal(SIGTERM,&_sighandlerQuit);
 	signal(SIGQUIT,&_sighandlerQuit);

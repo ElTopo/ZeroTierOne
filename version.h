@@ -22,7 +22,7 @@
 /**
  * Minor version
  */
-#define ZEROTIER_ONE_VERSION_MINOR 5
+#define ZEROTIER_ONE_VERSION_MINOR 6
 
 /**
  * Revision
