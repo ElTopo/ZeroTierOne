@@ -223,14 +223,16 @@ LinuxEthernetTap::LinuxEthernetTap(
 				if (ioctl(sock,SIOCSIFHWADDR,(void *)&ifr) < 0) {
 					::close(sock);
 					printf("WARNING: ioctl() failed setting up Linux tap device (set MAC)\n");
-					return;
+					// lxl
+					// return;
 				}
 
 				ifr.ifr_ifru.ifru_mtu = (int)_mtu;
 				if (ioctl(sock,SIOCSIFMTU,(void *)&ifr) < 0) {
 					::close(sock);
 					printf("WARNING: ioctl() failed setting up Linux tap device (set MTU)\n");
-					return;
+					// lxl
+					// return;
 				}
 
 				fcntl(_fd,F_SETFL,O_NONBLOCK);
