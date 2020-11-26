@@ -296,40 +296,48 @@ static void _peerToJson(nlohmann::json &pj,const ZT_Peer *peer)
 	pj["paths"] = pa;
 }
 
-static void _peerBondToJson(nlohmann::json &pj,const ZT_Peer *peer)
+static void _bondToJson(nlohmann::json &pj, SharedPtr<Bond> &bond)
 {
 	char tmp[256];
-	OSUtils::ztsnprintf(tmp,sizeof(tmp),"%.10llx",peer->address);
-	//pj["aggregateLinkLatency"] = peer->latency;
-	std::string policyStr = BondController::getPolicyStrByCode(peer->bondingPolicy);
-	pj["policy"] = policyStr;
+	uint64_t now = OSUtils::now();
+
+	int bondingPolicy = bond->getPolicy();
+	pj["bondingPolicy"] = BondController::getPolicyStrByCode(bondingPolicy);
+	if (bondingPolicy == ZT_BONDING_POLICY_NONE) {
+		return;
+	}
+
+	pj["isHealthy"] = bond->isHealthy();
+	pj["numAliveLinks"] = bond->getNumAliveLinks();
+	pj["numTotalLinks"] = bond->getNumTotalLinks();
+	pj["failoverInterval"] = bond->getFailoverInterval();
+	pj["downDelay"] = bond->getDownDelay();
+	pj["upDelay"] = bond->getUpDelay();
+	if (bondingPolicy == ZT_BONDING_POLICY_BALANCE_RR) {
+		pj["packetsPerLink"] = bond->getPacketsPerLink();
+	}
+	if (bondingPolicy == ZT_BONDING_POLICY_ACTIVE_BACKUP) {
+		pj["linkSelectMethod"] = bond->getLinkSelectMethod();
+	}
 
 	nlohmann::json pa = nlohmann::json::array();
-	for(unsigned int i=0;i<peer->pathCount;++i) {
-		int64_t lastSend = peer->paths[i].lastSend;
-		int64_t lastReceive = peer->paths[i].lastReceive;
-		nlohmann::json j;
-		j["ifname"] = std::string(peer->paths[i].ifname);
-		j["path"] = reinterpret_cast<const InetAddress *>(&(peer->paths[i].address))->toString(tmp);
-		j["lastTX"] = (lastSend < 0) ? 0 : lastSend;
-		j["lastRX"] = (lastReceive < 0) ? 0 : lastReceive;
-		j["lat"] = peer->paths[i].latencyMean;
-		j["pdv"] = peer->paths[i].latencyVariance;
+	std::vector< SharedPtr<Path> > paths = bond->getPeer()->paths(now);
 
-		//j["trustedPathId"] = peer->paths[i].trustedPathId;
-		//j["active"] = (bool)(peer->paths[i].expired == 0);
-		//j["expired"] = (bool)(peer->paths[i].expired != 0);
-		//j["preferred"] = (bool)(peer->paths[i].preferred != 0);
-		//j["ltm"] = peer->paths[i].latencyMax;
-		//j["plr"] = peer->paths[i].packetLossRatio;
-		//j["per"] = peer->paths[i].packetErrorRatio;
-		//j["thr"] = peer->paths[i].throughputMean;
-		//j["thm"] = peer->paths[i].throughputMax;
-		//j["thv"] = peer->paths[i].throughputVariance;
-		//j["avl"] = peer->paths[i].availability;
-		//j["age"] = peer->paths[i].age;
-		//j["alloc"] = peer->paths[i].allocation;
-		//j["ifname"] = peer->paths[i].ifname;
+	for(unsigned int i=0;i<paths.size();++i) {
+		char pathStr[128];
+		paths[i]->address().toString(pathStr);
+
+		nlohmann::json j;
+		j["ifname"] = bond->getLink(paths[i])->ifname();
+		j["path"] = pathStr;
+		j["alive"] = paths[i]->alive(now,true);
+		j["bonded"] = paths[i]->bonded();
+		j["latencyMean"] = paths[i]->latencyMean();
+		j["latencyVariance"] = paths[i]->latencyVariance();
+		j["packetLossRatio"] = paths[i]->packetLossRatio();
+		j["packetErrorRatio"] = paths[i]->packetErrorRatio();
+		j["givenLinkSpeed"] = 1000;
+		j["allocation"] = paths[i]->allocation();
 		pa.push_back(j);
 	}
 	pj["links"] = pa;
@@ -1051,7 +1059,7 @@ public:
 		}
 
 		// Set trusted paths if there are any
-		if (ppc.size() > 0) {
+		if (!ppc.empty()) {
 			for(std::map<InetAddress,ZT_PhysicalPathConfiguration>::iterator i(ppc.begin());i!=ppc.end();++i)
 				_node->setPhysicalPathConfiguration(reinterpret_cast<const struct sockaddr_storage *>(&(i->first)),&(i->second));
 		}
@@ -1104,6 +1112,7 @@ public:
 	virtual void terminate()
 	{
 		_run_m.lock();
+
 		_run = false;
 		_run_m.unlock();
 		_phy.whack();
@@ -1168,7 +1177,7 @@ public:
 		 * URL encoding, and /'s in URL args will screw it up. But the only URL args
 		 * it really uses in ?jsonp=funcionName, and otherwise it just takes simple
 		 * paths to simply-named resources. */
-		if (ps.size() > 0) {
+		if (!ps.empty()) {
 			std::size_t qpos = ps[ps.size() - 1].find('?');
 			if (qpos != std::string::npos) {
 				std::string args(ps[ps.size() - 1].substr(qpos + 1));
@@ -1201,12 +1210,12 @@ public:
 		// Authenticate via Synology's built-in cgi script
 		if (!isAuth) {
 			int synotoken_pos = path.find("SynoToken");
-			int argpos = path.find("?");
+			int argpos = path.find('?');
 			if(synotoken_pos != std::string::npos && argpos != std::string::npos) {
 				std::string cookie = path.substr(argpos+1, synotoken_pos-(argpos+1));
 				std::string synotoken = path.substr(synotoken_pos);
-				std::string cookie_val = cookie.substr(cookie.find("=")+1);
-				std::string synotoken_val = synotoken.substr(synotoken.find("=")+1);
+				std::string cookie_val = cookie.substr(cookie.find('=')+1);
+				std::string synotoken_val = synotoken.substr(synotoken.find('=')+1);
 				// Set necessary env for auth script
 				std::map<std::string,std::string>::const_iterator ah2(headers.find("x-forwarded-for"));
 				setenv("HTTP_COOKIE", cookie_val.c_str(), true);
@@ -1230,9 +1239,34 @@ public:
 			}
 		}
 #endif
-
 		if (httpMethod == HTTP_GET) {
 			if (isAuth) {
+				if (ps[0] == "bond") {
+					if (_node->bondController()->inUse()) {
+						if (ps.size() == 3) {
+							//fprintf(stderr, "ps[0]=%s\nps[1]=%s\nps[2]=%s\n", ps[0].c_str(), ps[1].c_str(), ps[2].c_str());
+							if (ps[2].length() == 10) {
+								// check if hex string
+								const uint64_t id = Utils::hexStrToU64(ps[2].c_str());
+								if (ps[1] == "show") {
+									SharedPtr<Bond> bond = _node->bondController()->getBondByPeerId(id);
+									if (bond) {
+										_bondToJson(res,bond);
+										scode = 200;
+									} else {
+										fprintf(stderr, "unable to find bond to peer %llx\n", id);
+										scode = 400;
+									}
+								}
+								if (ps[1] == "flows") {
+									fprintf(stderr, "displaying flows\n");
+								}
+							}
+						}
+					} else {
+						scode = 400; /* bond controller is not enabled */
+					}
+				}
 				if (ps[0] == "status") {
 					ZT_NodeStatus status;
 					_node->status(&status);
@@ -1257,7 +1291,7 @@ public:
 					json &settings = res["config"]["settings"];
 					settings["primaryPort"] = OSUtils::jsonInt(settings["primaryPort"],(uint64_t)_primaryPort) & 0xffff;
 					settings["allowTcpFallbackRelay"] = OSUtils::jsonBool(settings["allowTcpFallbackRelay"],_allowTcpFallbackRelay);
-
+/*
 					if (_node->bondController()->inUse()) {
 						json &multipathConfig = res["bonds"];
 						ZT_PeerList *pl = _node->peers();
@@ -1266,13 +1300,14 @@ public:
 							for(unsigned long i=0;i<pl->peerCount;++i) {
 								if (pl->peers[i].isBonded) {
 									nlohmann::json pj;
-									_peerBondToJson(pj,&(pl->peers[i]));
+									_bondToJson(pj,&(pl->peers[i]));
 									OSUtils::ztsnprintf(peerAddrStr,sizeof(peerAddrStr),"%.10llx",pl->peers[i].address);
 									multipathConfig[peerAddrStr] = (pj);
 								}
 							}
 						}
 					}
+*/
 
 #ifdef ZT_USE_MINIUPNPC
 					settings["portMappingEnabled"] = OSUtils::jsonBool(settings["portMappingEnabled"],true);
@@ -1413,8 +1448,32 @@ public:
 
 			} else scode = 401; // isAuth == false
 		} else if ((httpMethod == HTTP_POST)||(httpMethod == HTTP_PUT)) {
-			if (isAuth) {
-
+ 			if (isAuth) {
+				if (ps[0] == "bond") {
+					if (_node->bondController()->inUse()) {
+						if (ps.size() == 3) {
+							//fprintf(stderr, "ps[0]=%s\nps[1]=%s\nps[2]=%s\n", ps[0].c_str(), ps[1].c_str(), ps[2].c_str());
+							if (ps[2].length() == 10) {
+								// check if hex string
+								const uint64_t id = Utils::hexStrToU64(ps[2].c_str());
+								if (ps[1] == "rotate") {
+									SharedPtr<Bond> bond = _node->bondController()->getBondByPeerId(id);
+									if (bond) {
+										scode = bond->abForciblyRotateLink() ? 200 : 400;
+									} else {
+										fprintf(stderr, "unable to find bond to peer %llx\n", id);
+										scode = 400;
+									}
+								}
+								if (ps[1] == "enable") {
+									fprintf(stderr, "enabling bond\n");
+								}
+							}
+						}
+					} else {
+						scode = 400; /* bond controller is not enabled */
+					}
+				}
 				if (ps[0] == "moon") {
 					if (ps.size() == 2) {
 
@@ -1644,6 +1703,9 @@ public:
 				std::string customPolicyStr(policyItr.key());
 				json &customPolicy = policyItr.value();
 				std::string basePolicyStr(OSUtils::jsonString(customPolicy["basePolicy"],""));
+				if (basePolicyStr.empty()) {
+					fprintf(stderr, "error: no base policy was specified for custom policy (%s)\n", customPolicyStr.c_str());
+				}
 				if (_node->bondController()->getPolicyCodeByStr(basePolicyStr) == ZT_BONDING_POLICY_NONE) {
 					fprintf(stderr, "error: custom policy (%s) is invalid, unknown base policy (%s).\n",
 						customPolicyStr.c_str(), basePolicyStr.c_str());
@@ -1677,6 +1739,7 @@ public:
 					newTemplateBond->setUserQualityWeights(weights,ZT_QOS_WEIGHT_SIZE);
 				}
 				// Bond-specific properties
+				newTemplateBond->setOverflowMode(OSUtils::jsonInt(customPolicy["overflow"],false));
 				newTemplateBond->setUpDelay(OSUtils::jsonInt(customPolicy["upDelay"],-1));
 				newTemplateBond->setDownDelay(OSUtils::jsonInt(customPolicy["downDelay"],-1));
 				newTemplateBond->setFlowRebalanceStrategy(OSUtils::jsonInt(customPolicy["flowRebalanceStrategy"],(uint64_t)0));
@@ -1857,7 +1920,7 @@ public:
 		if (!n.settings.allowManaged)
 			return false;
 
-		if (n.settings.allowManagedWhitelist.size() > 0) {
+		if (!n.settings.allowManagedWhitelist.empty()) {
 			bool allowed = false;
 			for (InetAddress addr : n.settings.allowManagedWhitelist) {
 				if (addr.containsAddress(target) && addr.netmaskBits() <= target.netmaskBits()) {
@@ -2144,7 +2207,7 @@ public:
 							bool allow;
 							{
 								Mutex::Lock _l(_localConfig_m);
-								if (_allowManagementFrom.size() == 0) {
+								if (_allowManagementFrom.empty()) {
 									allow = (tc->remoteAddr.ipScope() == InetAddress::IP_SCOPE_LOOPBACK);
 								} else {
 									allow = false;
@@ -2323,7 +2386,7 @@ public:
 							Dictionary<4096> nc;
 							nc.load(nlcbuf.c_str());
 							Buffer<1024> allowManaged;
-							if (nc.get("allowManaged", allowManaged) && allowManaged.size() != 0) {
+							if (nc.get("allowManaged", allowManaged) && !allowManaged.size() == 0) {
 								std::string addresses (allowManaged.begin(), allowManaged.size());
 								if (allowManaged.size() <= 5) { // untidy parsing for backward compatibility
 									if (allowManaged[0] == '1' || allowManaged[0] == 't' || allowManaged[0] == 'T') {
@@ -2869,9 +2932,9 @@ public:
 		return 1;
 	}
 
-	inline int nodePathLookupFunction(uint64_t ztaddr,int family,struct sockaddr_storage *result)
+	inline int nodePathLookupFunction(uint64_t ztaddr, int family, struct sockaddr_storage* result)
 	{
-		const Hashtable< uint64_t,std::vector<InetAddress> > *lh = (const Hashtable< uint64_t,std::vector<InetAddress> > *)0;
+		const Hashtable< uint64_t, std::vector<InetAddress> >* lh = (const Hashtable< uint64_t, std::vector<InetAddress> > *)0;
 		if (family < 0)
 			lh = (_node->prng() & 1) ? &_v4Hints : &_v6Hints;
 		else if (family == AF_INET)
@@ -2879,19 +2942,20 @@ public:
 		else if (family == AF_INET6)
 			lh = &_v6Hints;
 		else return 0;
-		const std::vector<InetAddress> *l = lh->get(ztaddr);
-		if ((l)&&(l->size() > 0)) {
-			memcpy(result,&((*l)[(unsigned long)_node->prng() % l->size()]),sizeof(struct sockaddr_storage));
+		const std::vector<InetAddress>* l = lh->get(ztaddr);
+		if ((l) && (!l->empty())) {
+			memcpy(result, &((*l)[(unsigned long)_node->prng() % l->size()]), sizeof(struct sockaddr_storage));
 			return 1;
-		} else return 0;
+		}
+		else return 0;
 	}
 
-	inline void tapFrameHandler(uint64_t nwid,const MAC &from,const MAC &to,unsigned int etherType,unsigned int vlanId,const void *data,unsigned int len)
+	inline void tapFrameHandler(uint64_t nwid, const MAC& from, const MAC& to, unsigned int etherType, unsigned int vlanId, const void* data, unsigned int len)
 	{
-		_node->processVirtualNetworkFrame((void *)0,OSUtils::now(),nwid,from.toInt(),to.toInt(),etherType,vlanId,data,len,&_nextBackgroundTaskDeadline);
+		_node->processVirtualNetworkFrame((void*)0, OSUtils::now(), nwid, from.toInt(), to.toInt(), etherType, vlanId, data, len, &_nextBackgroundTaskDeadline);
 	}
 
-	inline void onHttpRequestToServer(TcpConnection *tc)
+	inline void onHttpRequestToServer(TcpConnection* tc)
 	{
 		char tmpn[4096];
 		std::string data;
@@ -2902,29 +2966,31 @@ public:
 		// phyOnTcpData(). If we made it here the source IP is okay.
 
 		try {
-			scode = handleControlPlaneHttpRequest(tc->remoteAddr,tc->parser.method,tc->url,tc->headers,tc->readq,data,contentType);
-		} catch (std::exception &exc) {
-			fprintf(stderr,"WARNING: unexpected exception processing control HTTP request: %s" ZT_EOL_S,exc.what());
+			scode = handleControlPlaneHttpRequest(tc->remoteAddr, tc->parser.method, tc->url, tc->headers, tc->readq, data, contentType);
+		}
+		catch (std::exception& exc) {
+			fprintf(stderr, "WARNING: unexpected exception processing control HTTP request: %s" ZT_EOL_S, exc.what());
 			scode = 500;
-		} catch ( ... ) {
-			fprintf(stderr,"WARNING: unexpected exception processing control HTTP request: unknown exception" ZT_EOL_S);
+		}
+		catch (...) {
+			fprintf(stderr, "WARNING: unexpected exception processing control HTTP request: unknown exception" ZT_EOL_S);
 			scode = 500;
 		}
 
-		const char *scodestr;
-		switch(scode) {
-			case 200: scodestr = "OK"; break;
-			case 400: scodestr = "Bad Request"; break;
-			case 401: scodestr = "Unauthorized"; break;
-			case 403: scodestr = "Forbidden"; break;
-			case 404: scodestr = "Not Found"; break;
-			case 500: scodestr = "Internal Server Error"; break;
-			case 501: scodestr = "Not Implemented"; break;
-			case 503: scodestr = "Service Unavailable"; break;
-			default: scodestr = "Error"; break;
+		const char* scodestr;
+		switch (scode) {
+		case 200: scodestr = "OK"; break;
+		case 400: scodestr = "Bad Request"; break;
+		case 401: scodestr = "Unauthorized"; break;
+		case 403: scodestr = "Forbidden"; break;
+		case 404: scodestr = "Not Found"; break;
+		case 500: scodestr = "Internal Server Error"; break;
+		case 501: scodestr = "Not Implemented"; break;
+		case 503: scodestr = "Service Unavailable"; break;
+		default: scodestr = "Error"; break;
 		}
 
-		OSUtils::ztsnprintf(tmpn,sizeof(tmpn),"HTTP/1.1 %.3u %s\r\nCache-Control: no-cache\r\nPragma: no-cache\r\nContent-Type: %s\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n",
+		OSUtils::ztsnprintf(tmpn, sizeof(tmpn), "HTTP/1.1 %.3u %s\r\nCache-Control: no-cache\r\nPragma: no-cache\r\nContent-Type: %s\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n",
 			scode,
 			scodestr,
 			contentType.c_str(),
@@ -2936,30 +3002,42 @@ public:
 				tc->writeq.append(data);
 		}
 
-		_phy.setNotifyWritable(tc->sock,true);
+		_phy.setNotifyWritable(tc->sock, true);
 	}
 
-	inline void onHttpResponseFromClient(TcpConnection *tc)
+	inline void onHttpResponseFromClient(TcpConnection* tc)
 	{
 		_phy.close(tc->sock);
 	}
 
-	bool shouldBindInterface(const char *ifname,const InetAddress &ifaddr)
+	bool shouldBindInterface(const char* ifname, const InetAddress& ifaddr)
 	{
 #if defined(__linux__) || defined(linux) || defined(__LINUX__) || defined(__linux)
-		if ((ifname[0] == 'l')&&(ifname[1] == 'o')) return false; // loopback
-		if ((ifname[0] == 'z')&&(ifname[1] == 't')) return false; // sanity check: zt#
-		if ((ifname[0] == 't')&&(ifname[1] == 'u')&&(ifname[2] == 'n')) return false; // tun# is probably an OpenVPN tunnel or similar
-		if ((ifname[0] == 't')&&(ifname[1] == 'a')&&(ifname[2] == 'p')) return false; // tap# is probably an OpenVPN tunnel or similar
+		if ((ifname[0] == 'l') && (ifname[1] == 'o')) return false; // loopback
+		if ((ifname[0] == 'z') && (ifname[1] == 't')) return false; // sanity check: zt#
+		if ((ifname[0] == 't') && (ifname[1] == 'u') && (ifname[2] == 'n')) return false; // tun# is probably an OpenVPN tunnel or similar
+		if ((ifname[0] == 't') && (ifname[1] == 'a') && (ifname[2] == 'p')) return false; // tap# is probably an OpenVPN tunnel or similar
 #endif
 
 #ifdef __APPLE__
-		if ((ifname[0] == 'f')&&(ifname[1] == 'e')&&(ifname[2] == 't')&&(ifname[3] == 'h')) return false; // ... as is feth#
-		if ((ifname[0] == 'l')&&(ifname[1] == 'o')) return false; // loopback
-		if ((ifname[0] == 'z')&&(ifname[1] == 't')) return false; // sanity check: zt#
-		if ((ifname[0] == 't')&&(ifname[1] == 'u')&&(ifname[2] == 'n')) return false; // tun# is probably an OpenVPN tunnel or similar
-		if ((ifname[0] == 't')&&(ifname[1] == 'a')&&(ifname[2] == 'p')) return false; // tap# is probably an OpenVPN tunnel or similar
-		if ((ifname[0] == 'u')&&(ifname[1] == 't')&&(ifname[2] == 'u')&&(ifname[3] == 'n')) return false; // ... as is utun#
+		if ((ifname[0] == 'f') && (ifname[1] == 'e') && (ifname[2] == 't') && (ifname[3] == 'h')) return false; // ... as is feth#
+		if ((ifname[0] == 'l') && (ifname[1] == 'o')) return false; // loopback
+		if ((ifname[0] == 'z') && (ifname[1] == 't')) return false; // sanity check: zt#
+		if ((ifname[0] == 't') && (ifname[1] == 'u') && (ifname[2] == 'n')) return false; // tun# is probably an OpenVPN tunnel or similar
+		if ((ifname[0] == 't') && (ifname[1] == 'a') && (ifname[2] == 'p')) return false; // tap# is probably an OpenVPN tunnel or similar
+		if ((ifname[0] == 'u') && (ifname[1] == 't') && (ifname[2] == 'u') && (ifname[3] == 'n')) return false; // ... as is utun#
+#endif
+
+#ifdef _WIN32
+		if ((ifname[0] == 'Z') && (ifname[1] == 'e') && (ifname[2] == 'r') && ifname[3] == 'o' &&
+			(ifname[4] == 'T') && (ifname[5] == 'i') && (ifname[6] == 'e') && (ifname[7] == 'r')) {
+			return false;
+		}
+#endif
+
+#ifdef __FreeBSD__
+		if ((ifname[0] == 'l') && (ifname[1] == 'o')) return false; // loopback
+		if ((ifname[0] == 'z') && (ifname[1] == 't')) return false; // sanity check: zt#
 #endif
 
 		{

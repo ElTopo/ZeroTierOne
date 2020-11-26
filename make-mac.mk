@@ -3,7 +3,7 @@ CXX=clang++
 INCLUDES=
 DEFS=
 LIBS=
-ARCH_FLAGS=-msse -msse2 -arch x86_64 -arch arm64 
+ARCH_FLAGS=-arch x86_64 -arch arm64 
 
 CODESIGN=echo
 PRODUCTSIGN=echo
@@ -93,10 +93,10 @@ CXXFLAGS=$(CFLAGS) -std=c++11 -stdlib=libc++
 all: one macui
 
 ext/x64-salsa2012-asm/salsa2012.o:
-	as -arch x86_64 -o ext/x64-salsa2012-asm/salsa2012.o ext/x64-salsa2012-asm/salsa2012.s
+	as -arch x86_64 -mmacosx-version-min=10.7 -o ext/x64-salsa2012-asm/salsa2012.o ext/x64-salsa2012-asm/salsa2012.s
 
 mac-agent: FORCE
-	$(CC) -Ofast $(ARCH_FLAGS) -o MacEthernetTapAgent osdep/MacEthernetTapAgent.c
+	$(CC) -Ofast $(ARCH_FLAGS) -mmacosx-version-min=10.7 -o MacEthernetTapAgent osdep/MacEthernetTapAgent.c
 	$(CODESIGN) -f --options=runtime -s $(CODESIGN_APP_CERT) MacEthernetTapAgent
 
 osdep/MacDNSHelper.o: osdep/MacDNSHelper.mm
