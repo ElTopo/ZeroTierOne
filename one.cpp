@@ -2086,7 +2086,7 @@ int main(int argc,char **argv)
 	pthread_attr_t tattr;
 	pthread_attr_init(&tattr);
 	pthread_attr_setstacksize(&tattr,1048576);
-	// lxl:  pthread_setattr_default_np(&tattr);
+	pthread_setattr_default_np(&tattr);
 	pthread_attr_destroy(&tattr);
 #endif
 
