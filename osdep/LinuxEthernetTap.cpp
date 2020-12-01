@@ -92,7 +92,8 @@ LinuxEthernetTap::LinuxEthernetTap(
 	_homePath(homePath),
 	_mtu(mtu),
 	_fd(0),
-	_enabled(true)
+	_enabled(true),
+	_run(true)
 {
 	static std::mutex s_tapCreateLock;
 	char procpath[128],nwids[32];
@@ -184,6 +185,7 @@ LinuxEthernetTap::LinuxEthernetTap(
 
 	(void)::pipe(_shutdownSignalPipe);
 
+	_thread_init_l.lock();
 	for(unsigned int t=0;t<2;++t) {
 		_tapReaderThread[t] = std::thread([this, t]{
 			fd_set readfds,nullfds;
@@ -238,9 +240,15 @@ LinuxEthernetTap::LinuxEthernetTap(
 				fcntl(_fd,F_SETFL,O_NONBLOCK);
 
 				::close(sock);
+
+				_thread_init_l.unlock();
 			} else {
-				usleep(1500000);
+				_thread_init_l.lock();
+				_thread_init_l.unlock();
 			}
+
+			if (!_run)
+				return;
 
 			FD_ZERO(&readfds);
 			FD_ZERO(&nullfds);
@@ -326,16 +334,18 @@ LinuxEthernetTap::LinuxEthernetTap(
 
 LinuxEthernetTap::~LinuxEthernetTap()
 {
+	_run = false;
+
 	(void)::write(_shutdownSignalPipe[1],"\0",1); // causes reader thread(s) to exit
 	_tapq.post(std::pair<void *,int>(nullptr,0)); // causes processor thread to exit
-
-	::close(_fd);
-	::close(_shutdownSignalPipe[0]);
-	::close(_shutdownSignalPipe[1]);
 
 	_tapReaderThread[0].join();
 	_tapReaderThread[1].join();
 	_tapProcessorThread.join();
+
+	::close(_fd);
+	::close(_shutdownSignalPipe[0]);
+	::close(_shutdownSignalPipe[1]);
 
 	for(std::vector<void *>::iterator i(_buffers.begin());i!=_buffers.end();++i)
 		free(*i);
