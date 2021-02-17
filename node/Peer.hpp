@@ -15,6 +15,7 @@
 #define ZT_PEER_HPP
 
 #include <vector>
+#include <list>
 
 #include "../include/ZeroTierOne.h"
 
@@ -533,11 +534,14 @@ public:
 	 */
 	inline int8_t bondingPolicy() { return _bondingPolicy; }
 
-	//const AES *aesKeysIfSupported() const
+	//inline const AES *aesKeysIfSupported() const
 	//{ return (const AES *)0; }
 
-	const AES *aesKeysIfSupported() const
+	inline const AES *aesKeysIfSupported() const
 	{ return (_vProto >= 12) ? _aesKeys : (const AES *)0; }
+
+	inline const AES *aesKeys() const
+	{ return _aesKeys; }
 
 private:
 	struct _PeerPath
@@ -572,6 +576,9 @@ private:
 	uint16_t _vMajor;
 	uint16_t _vMinor;
 	uint16_t _vRevision;
+
+	std::list< std::pair< Path *, int64_t > > _lastTriedPath;
+	Mutex _lastTriedPath_m;
 
 	_PeerPath _paths[ZT_MAX_PEER_NETWORK_PATHS];
 	Mutex _paths_m;

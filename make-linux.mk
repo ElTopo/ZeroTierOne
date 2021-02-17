@@ -216,11 +216,11 @@ ifeq ($(CC_MACH),armv7ve)
 endif
 ifeq ($(CC_MACH),arm64)
 	ZT_ARCHITECTURE=4
-	override DEFS+=-DZT_NO_TYPE_PUNNING -DZT_ARCH_ARM_HAS_NEON -march=armv8-a+aes+crypto -mtune=generic -mstrict-align
+	override DEFS+=-DZT_NO_TYPE_PUNNING -DZT_ARCH_ARM_HAS_NEON -march=armv8-a+crypto -mtune=generic -mstrict-align
 endif
 ifeq ($(CC_MACH),aarch64)
 	ZT_ARCHITECTURE=4
-	override DEFS+=-DZT_NO_TYPE_PUNNING -DZT_ARCH_ARM_HAS_NEON -march=armv8-a+aes+crypto -mtune=generic -mstrict-align
+	override DEFS+=-DZT_NO_TYPE_PUNNING -DZT_ARCH_ARM_HAS_NEON -march=armv8-a+crypto -mtune=generic -mstrict-align
 endif
 ifeq ($(CC_MACH),mipsel)
 	ZT_ARCHITECTURE=5
@@ -282,8 +282,8 @@ ifeq ($(ZT_ARCHITECTURE),3)
 		override CXXFLAGS+=-march=armv5t -mfloat-abi=soft -msoft-float -mno-unaligned-access -marm
 		ZT_USE_ARM32_NEON_ASM_CRYPTO=0
 	else
-		override CFLAGS+=-march=armv5t -mno-unaligned-access -marm -fexceptions
-		override CXXFLAGS+=-march=armv5t -mno-unaligned-access -marm -fexceptions
+		override CFLAGS+=-mfloat-abi=hard -mfpu=vfp -mcpu=arm1176jzf-s -marm -mno-unaligned-access
+		override CXXFLAGS+=-mfloat-abi=hard -mfpu=vfp -mcpu=arm1176jzf-s -fexceptions -marm -mno-unaligned-access
 		ZT_USE_ARM32_NEON_ASM_CRYPTO=0
 	endif
 endif

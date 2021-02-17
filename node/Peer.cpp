@@ -116,37 +116,28 @@ void Peer::received(
 						havePath = true;
 						break;
 					}
-				} else break;
+				} else {
+					break;
+				}
 			}
 		}
 
-		bool attemptToContact = false;
-		if ((!havePath)&&(RR->node->shouldUsePathForZeroTierTraffic(tPtr,_id.address(),path->localSocket(),path->address()))) {
-			Mutex::Lock _l(_paths_m);
+		if ( (!havePath) && RR->node->shouldUsePathForZeroTierTraffic(tPtr,_id.address(),path->localSocket(),path->address()) ) {
+			if (verb == Packet::VERB_OK) {
+				Mutex::Lock _l(_paths_m);
 
-			// Paths are redunant if they duplicate an alive path to the same IP or
-			// with the same local socket and address family.
-			bool redundant = false;
-			for(unsigned int i=0;i<ZT_MAX_PEER_NETWORK_PATHS;++i) {
-				if (_paths[i].p) {
-					if ( (_paths[i].p->alive(now)) && ( ((_paths[i].p->localSocket() == path->localSocket())&&(_paths[i].p->address().ss_family == path->address().ss_family)) || (_paths[i].p->address().ipsEqual2(path->address())) ) )  {
-						redundant = true;
-						break;
-					}
-				} else break;
-			}
-
-			if (!redundant) {
 				unsigned int replacePath = ZT_MAX_PEER_NETWORK_PATHS;
-				int replacePathQuality = 0;
+				long replacePathQuality = 0;
 				for(unsigned int i=0;i<ZT_MAX_PEER_NETWORK_PATHS;++i) {
 					if (_paths[i].p) {
-						const int q = _paths[i].p->quality(now);
-						if (q > replacePathQuality) {
-							replacePathQuality = q;
+						if ( (!_paths[i].p->alive(now)) || _paths[i].p->address().ipsEqual(path->address()) ) {
 							replacePath = i;
-							if (!_paths[i].p->alive(now)) {
-								break; // Stop searching, we found an identical dead path, replace the object
+							break;
+						} else {
+							const long q = _paths[i].p->quality(now) / _paths[i].priority;
+							if (q > replacePathQuality) {
+								replacePathQuality = q;
+								replacePath = i;
 							}
 						}
 					} else {
@@ -156,22 +147,33 @@ void Peer::received(
 				}
 
 				if (replacePath != ZT_MAX_PEER_NETWORK_PATHS) {
-					if (verb == Packet::VERB_OK) {
-						RR->t->peerLearnedNewPath(tPtr,networkId,*this,path,packetId);
-						_paths[replacePath].lr = now;
-						_paths[replacePath].p = path;
-						_paths[replacePath].priority = 1;
+					RR->t->peerLearnedNewPath(tPtr, networkId, *this, path, packetId);
+					_paths[replacePath].lr = now;
+					_paths[replacePath].p = path;
+					_paths[replacePath].priority = 1;
+				}
+			} else {
+				Mutex::Lock ltl(_lastTriedPath_m);
+
+				bool triedTooRecently = false;
+				for(std::list< std::pair< Path *, int64_t > >::iterator i(_lastTriedPath.begin());i!=_lastTriedPath.end();) {
+					if ((now - i->second) > 1000) {
+						_lastTriedPath.erase(i++);
+					} else if (i->first == path.ptr()) {
+						++i;
+						triedTooRecently = true;
 					} else {
-						attemptToContact = true;
+						++i;
 					}
 				}
-			}
-		}
 
-		if (attemptToContact) {
-			attemptToContactAt(tPtr,path->localSocket(),path->address(),now,true);
-			path->sent(now);
-			RR->t->peerConfirmingUnknownPath(tPtr,networkId,*this,path,packetId,verb);
+				if (!triedTooRecently) {
+					_lastTriedPath.push_back(std::pair< Path *, int64_t >(path.ptr(), now));
+					attemptToContactAt(tPtr,path->localSocket(),path->address(),now,true);
+					path->sent(now);
+					RR->t->peerConfirmingUnknownPath(tPtr,networkId,*this,path,packetId,verb);
+				}
+			}
 		}
 	}
 
