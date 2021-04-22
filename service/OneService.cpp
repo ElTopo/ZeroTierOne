@@ -242,7 +242,7 @@ static void _networkToJson(nlohmann::json &nj,const ZT_VirtualNetworkConfig *nc,
 	m["domain"] = nc->dns.domain;
 	m["servers"] = nlohmann::json::array();
 	for(int j=0;j<ZT_MAX_DNS_SERVERS;++j) {
-		
+
 		InetAddress a(nc->dns.server_addr[j]);
 		if (a.isV4() || a.isV6()) {
 			char buf[256];
@@ -250,7 +250,7 @@ static void _networkToJson(nlohmann::json &nj,const ZT_VirtualNetworkConfig *nc,
 		}
 	}
 	nj["dns"] = m;
-	
+
 }
 
 static void _peerToJson(nlohmann::json &pj,const ZT_Peer *peer)
@@ -274,10 +274,12 @@ static void _peerToJson(nlohmann::json &pj,const ZT_Peer *peer)
 	pj["latency"] = peer->latency;
 	pj["role"] = prole;
 	pj["isBonded"] = peer->isBonded;
-	pj["bondingPolicy"] = peer->bondingPolicy;
-	pj["isHealthy"] = peer->isHealthy;
-	pj["numAliveLinks"] = peer->numAliveLinks;
-	pj["numTotalLinks"] = peer->numTotalLinks;
+	if (peer->isBonded) {
+		pj["bondingPolicy"] = peer->bondingPolicy;
+		pj["isHealthy"] = peer->isHealthy;
+		pj["numAliveLinks"] = peer->numAliveLinks;
+		pj["numTotalLinks"] = peer->numTotalLinks;
+	}
 
 	nlohmann::json pa = nlohmann::json::array();
 	for(unsigned int i=0;i<peer->pathCount;++i) {
@@ -3031,13 +3033,6 @@ public:
 		if ((ifname[0] == 'u') && (ifname[1] == 't') && (ifname[2] == 'u') && (ifname[3] == 'n')) return false; // ... as is utun#
 #endif
 
-#ifdef _WIN32
-		if ((ifname[0] == 'Z') && (ifname[1] == 'e') && (ifname[2] == 'r') && ifname[3] == 'o' &&
-			(ifname[4] == 'T') && (ifname[5] == 'i') && (ifname[6] == 'e') && (ifname[7] == 'r')) {
-			return false;
-		}
-#endif
-
 #ifdef __FreeBSD__
 		if ((ifname[0] == 'l') && (ifname[1] == 'o')) return false; // loopback
 		if ((ifname[0] == 'z') && (ifname[1] == 't')) return false; // sanity check: zt#
@@ -3049,7 +3044,9 @@ public:
 				if (!strncmp(p->c_str(),ifname,p->length()))
 					return false;
 			}
-			return _node->bondController()->allowedToBind(std::string(ifname));
+			if (!_node->bondController()->allowedToBind(std::string(ifname))) {
+				return false;
+			}
 		}
 		{
 			// Check global blacklists
@@ -3076,6 +3073,10 @@ public:
 						if (i->ipsEqual(ifaddr))
 							return false;
 					}
+#ifdef _WIN32
+					if (n->second.tap->friendlyName() == ifname)
+						return false;
+#endif
 				}
 			}
 		}
